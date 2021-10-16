@@ -1,0 +1,941 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Sample AWS WAF Dashboard build on Amazon Opensearch Service.
+Parameters:
+  DataNodeEBSVolumeSize:
+    Type: Number
+    Default: 100
+    Description: Opensearch volume disk size
+  NodeType:
+    Type: String
+    Default: t3.small.search
+    Description: Opensearch Node Type
+  OpensearchDomainName:
+    Type: String
+    Default: waf-dashboards
+    AllowedPattern: '[a-z\-]*'
+    Description: Opensearch domain name
+  UserEmail:
+    Type: String
+    Default: your@email.com
+    Description: Dashboard user e-mail address
+Resources:
+  UserPoolDomainSetterLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: lambda_function.handler
+      Role: !GetAtt UserPoolDomainSetterLambdaRole.Arn
+      Code:
+        S3Bucket: !Join 
+          - ''
+          - - waf-dashboards-
+            - !Ref 'AWS::Region'
+        S3Key: domain-setter-lambda.zip
+      Runtime: python3.7
+      MemorySize: 128
+      Timeout: 60
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: b8d6fd85-0b4d-4215-b363-f2b1c8f6b1bd
+  ESCognitoAuthSetterLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: lambda_function.handler
+      Role: !GetAtt ESCognitoAuthSetterLambdaRole.Arn
+      Code:
+        S3Bucket: !Join 
+          - ''
+          - - waf-dashboards-
+            - !Ref 'AWS::Region'
+        S3Key: es-cognito-auth-lambda.zip
+      Runtime: python3.7
+      MemorySize: 128
+      Timeout: 900
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 5b8e2a5d-009d-45a8-8e80-0b6ff0b07ff8
+  KibanaCustomizerLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: lambda_function.handler
+      Role: !GetAtt KibanaCustomizerLambdaRole.Arn
+      Code:
+        S3Bucket: !Join 
+          - ''
+          - - waf-dashboards-
+            - !Ref 'AWS::Region'
+        S3Key: kibana-customizer-lambda.zip
+      Runtime: python3.7
+      MemorySize: 128
+      Timeout: 160
+      Environment:
+        Variables:
+          REGION: !Ref 'AWS::Region'
+          ACCOUNT_ID: !Ref 'AWS::AccountId'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: a140e4da-53b5-48d1-abaa-19abb5fa4d01
+  UserPoolDomainSetterLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: UserPoolDomainSetterPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'cognito-idp:CreateUserPoolDomain'
+                  - 'cognito-idp:DeleteUserPoolDomain'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'events:PutRule'
+                  - 'events:DeleteRule'
+                  - 'lambda:AddPermission'
+                  - 'events:PutTargets'
+                  - 'events:RemoveTargets'
+                  - 'lambda:RemovePermission'
+                Resource: '*'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 649d599b-7152-4e50-9395-deecbec8f80e
+  ESCognitoAuthSetterLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: ESCognitoAuthSetterPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'es:UpdateDomainConfig'
+                  - 'es:DescribeDomain'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'events:PutRule'
+                  - 'events:DeleteRule'
+                  - 'lambda:AddPermission'
+                  - 'events:PutTargets'
+                  - 'events:RemoveTargets'
+                  - 'lambda:RemovePermission'
+                  - 'iam:PassRole'
+                Resource: '*'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 6b409a73-30a1-47ef-ae0a-9952750de495
+  KibanaCustomizerLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: KibanaCustomizerPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'es:UpdateDomainConfig'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'events:PutRule'
+                  - 'events:DeleteRule'
+                  - 'lambda:AddPermission'
+                  - 'events:PutTargets'
+                  - 'events:RemoveTargets'
+                  - 'lambda:RemovePermission'
+                  - 'iam:PassRole'
+                  - 'waf:ListWebACLs'
+                  - 'waf-regional:ListWebACLs'
+                  - 'waf:ListRules'
+                  - 'waf-regional:ListRules'
+                  - 'wafv2:ListWebACLs'
+                Resource: '*'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: d14adc08-86bb-46ad-a3eb-af4c9a6fa51b
+  KinesisFirehoseS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 26f81a50-62cf-4dcf-b883-134a85a8fb88
+  UserPool:
+    Type: 'AWS::Cognito::UserPool'
+    Properties:
+      UserPoolName: WAFKibanaUsers
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          DeveloperOnlyAttribute: false
+          Mutable: true
+          Required: true
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 51f0b6cb-b56e-4d67-afd8-0238399599e3
+  IdentityPool:
+    Type: 'AWS::Cognito::IdentityPool'
+    Properties:
+      IdentityPoolName: WAFKibanaIdentityPool
+      AllowUnauthenticatedIdentities: true
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: bce5a84e-9b0e-4a02-b177-49afec844fd2
+  AuthenticatedPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'es:ESHttp*'
+            Resource:
+              - !Sub >-
+                arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${OpensearchDomainName}/*
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 8db201ea-ceef-47a4-8696-6f5c19fb6101
+  AuthenticatedRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: 'sts:AssumeRoleWithWebIdentity'
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Condition:
+              StringEquals:
+                'cognito-identity.amazonaws.com:aud': !Ref IdentityPool
+              'ForAnyValue:StringLike':
+                'cognito-identity.amazonaws.com:amr': authenticated
+      ManagedPolicyArns:
+        - !Ref AuthenticatedPolicy
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: bd917a13-280d-4a17-a9f4-af5e88be706c
+  CognitoAccessForAmazonESRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: es.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonESCognitoAccess'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: bd86a38e-5126-4c87-a1ca-164226abf19d
+  RoleAttachment:
+    Type: 'AWS::Cognito::IdentityPoolRoleAttachment'
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        authenticated: !GetAtt AuthenticatedRole.Arn
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 8fe815ea-ddcb-41fc-b4c5-721225e03ee1
+  CognitoPoolUser:
+    Type: 'AWS::Cognito::UserPoolUser'
+    Properties:
+      Username: !Ref UserEmail
+      UserPoolId: !Ref UserPool
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: f6b01f9e-6233-4052-8e23-32da779fd3a9
+  OpensearchDomain:
+    Type: 'AWS::OpenSearchService::Domain'
+    Properties:
+      DomainName: !Ref OpensearchDomainName
+      EngineVersion: OpenSearch_1.0
+      ClusterConfig:
+        DedicatedMasterEnabled: 'false'
+        InstanceCount: 1
+        InstanceType: !Ref NodeType
+      EncryptionAtRestOptions:
+        Enabled: true
+      EBSOptions:
+        EBSEnabled: true
+        VolumeSize: !Ref DataNodeEBSVolumeSize
+        VolumeType: gp2
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: '0'
+      AccessPolicies:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt AuthenticatedRole.Arn
+            Action: 'es:*'
+            Resource: !Sub >-
+              arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${OpensearchDomainName}/*
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt KibanaCustomizerLambdaRole.Arn
+            Action: 'es:*'
+            Resource: !Sub >-
+              arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${OpensearchDomainName}/*
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: afc63dab-90de-43d6-9c52-829a0e7f312a
+  KinesisFirehoseDeliveryRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: 'sts:AssumeRole'
+            Principal:
+              Service:
+                - firehose.amazonaws.com
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: cb49de65-8b46-49fe-b633-b9ea5e9b8a95
+  KinesisFirehoseDeliveryPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: WAFDeliveryPolicy
+      Roles:
+        - !Ref KinesisFirehoseDeliveryRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Action:
+              - 's3:AbortMultipartUpload'
+              - 's3:GetBucketLocation'
+              - 's3:GetObject'
+              - 's3:ListBucket'
+              - 's3:ListBucketMultipartUploads'
+              - 's3:PutObject'
+            Resource:
+              - !Sub 'arn:aws:s3:::${KinesisFirehoseS3Bucket}'
+              - !Sub 'arn:aws:s3:::${KinesisFirehoseS3Bucket}/*'
+          - Sid: ''
+            Effect: Allow
+            Action:
+              - 'lambda:InvokeFunction'
+              - 'lambda:GetFunctionConfiguration'
+            Resource: !Sub >-
+              arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:%FIREHOSE_DEFAULT_FUNCTION%:%FIREHOSE_DEFAULT_VERSION%
+          - Sid: ''
+            Effect: Allow
+            Action:
+              - 'es:DescribeElasticsearchDomain'
+              - 'es:DescribeDomainName'
+              - 'es:DescribeDomainNames'
+              - 'es:DescribeDomainNameConfig'
+              - 'es:ESHttpPost'
+              - 'es:ESHttpPut'
+            Resource:
+              - !Sub >-
+                arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${OpensearchDomainName}
+              - !Sub >-
+                arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${OpensearchDomainName}/*
+          - Sid: ''
+            Effect: Allow
+            Action:
+              - 'es:ESHttpGet'
+            Resource:
+              - !Sub >-
+                arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${OpensearchDomainName}/_all/_settings
+              - !Sub >-
+                arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${OpensearchDomainName}/_cluster/stats
+              - !Sub >-
+                arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${OpensearchDomainName}/awswaf*/_mapping/superstore
+              - !Sub >-
+                arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${OpensearchDomainName}/_nodes
+              - !Sub >-
+                arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${OpensearchDomainName}/_nodes/stats
+              - !Sub >-
+                arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${OpensearchDomainName}/_nodes/*/stats
+              - !Sub >-
+                arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${OpensearchDomainName}/_stats
+              - !Sub >-
+                arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${OpensearchDomainName}/awswaf*/_stats
+          - Sid: ''
+            Effect: Allow
+            Action:
+              - 'logs:PutLogEvents'
+            Resource:
+              - !Sub >-
+                arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/kinesisfirehose/waflogs:log-stream:*
+          - Sid: ''
+            Effect: Allow
+            Action:
+              - 'kinesis:DescribeStream'
+              - 'kinesis:GetShardIterator'
+              - 'kinesis:GetRecords'
+            Resource: !Sub >-
+              arn:aws:kinesis:${AWS::Region}:${AWS::AccountId}:stream/%FIREHOSE_STREAM_NAME%
+          - Effect: Allow
+            Action:
+              - 'kms:Decrypt'
+            Resource:
+              - !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/%SSE_KEY_ARN%'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 's3.${AWS::Region}.amazonaws.com'
+              StringLike:
+                'kms:EncryptionContext:aws:kinesis:arn': !Sub >-
+                  arn:aws:kinesis:${AWS::Region}:${AWS::AccountId}:stream/%FIREHOSE_STREAM_NAME%
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: e7738556-0548-4145-bad5-ee02e9d5642c
+  KinesisFirehoseDeliveryStreamLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: deliverystream
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 71faf532-95f2-4adf-8ef2-dbaad1719c50
+  KinesisFirehoseDeliveryStreamLogStream:
+    Type: 'AWS::Logs::LogStream'
+    Properties: 
+        LogGroupName: deliverystream
+        LogStreamName: elasticsearchDelivery
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 9f1263b0-de61-4e67-a410-ae7981770b23
+    DependsOn:
+      - KinesisFirehoseDeliveryStreamLogGroup
+  KinesisFirehoseDeliveryStream:
+    Type: 'AWS::KinesisFirehose::DeliveryStream'
+    Properties:
+      DeliveryStreamName: !Sub 'aws-waf-logs-${UserPool}'
+      DeliveryStreamType: DirectPut
+      ElasticsearchDestinationConfiguration:
+        BufferingHints:
+          IntervalInSeconds: '60'
+          SizeInMBs: 5
+        CloudWatchLoggingOptions:
+          Enabled: true
+          LogGroupName: deliverystream
+          LogStreamName: elasticsearchDelivery
+        DomainARN: !GetAtt OpensearchDomain.Arn
+        IndexName: awswaf
+        IndexRotationPeriod: OneDay
+        RetryOptions:
+          DurationInSeconds: '60'
+        RoleARN: !GetAtt KinesisFirehoseDeliveryRole.Arn
+        S3BackupMode: AllDocuments
+        S3Configuration:
+          BucketARN: !Sub 'arn:aws:s3:::${KinesisFirehoseS3Bucket}'
+          BufferingHints:
+            IntervalInSeconds: '60'
+            SizeInMBs: '50'
+          CompressionFormat: UNCOMPRESSED
+          Prefix: log/
+          RoleARN: !GetAtt KinesisFirehoseDeliveryRole.Arn
+          CloudWatchLoggingOptions:
+            Enabled: true
+            LogGroupName: deliverystream
+            LogStreamName: s3Backup
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 364aa33e-97f8-46f8-92dc-f6751ecee76c
+    DependsOn:
+      - KinesisFirehoseDeliveryStreamLogGroup
+  UserPoolDomainSetter:
+    Type: 'Custom::UserPoolDomainSetterLambda'
+    DependsOn: OpensearchDomain
+    Properties:
+      ServiceToken: !GetAtt UserPoolDomainSetterLambda.Arn
+      StackName: !Ref 'AWS::StackName'
+      UserPoolId: !Ref UserPool
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 76b56272-b6be-4749-81e2-b36c969d2065
+  ESCognitoAuthSetter:
+    Type: 'Custom::ESCognitoAuthSetter'
+    DependsOn: UserPoolDomainSetter
+    Properties:
+      ServiceToken: !GetAtt ESCognitoAuthSetterLambda.Arn
+      StackName: !Ref 'AWS::StackName'
+      UserPoolId: !Ref UserPool
+      IdentityPoolId: !Ref IdentityPool
+      RoleArn: !GetAtt CognitoAccessForAmazonESRole.Arn
+      DomainName: !Ref OpensearchDomainName
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 0b46eab3-417d-435d-b8ae-1eec593e95ff
+  KibanaCustomizer:
+    Type: 'Custom::KibanaCustomizer'
+    DependsOn: UserPoolDomainSetter
+    Properties:
+      ServiceToken: !GetAtt KibanaCustomizerLambda.Arn
+      StackName: !Ref 'AWS::StackName'
+      Region: !Ref 'AWS::Region'
+      Host: !GetAtt OpensearchDomain.DomainEndpoint
+      AccountID: !Ref 'AWS::AccountId'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: aa3d0f64-4227-4c23-8350-07f507369206
+  KibanaUpdate:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: lambda_function.update_kibana
+      Role: !GetAtt KibanaCustomizerLambdaRole.Arn
+      Code:
+        S3Bucket: !Join 
+          - ''
+          - - waf-dashboards-
+            - !Ref 'AWS::Region'
+        S3Key: kibana-customizer-lambda.zip
+      Runtime: python3.7
+      MemorySize: 128
+      Timeout: 160
+      Environment:
+        Variables:
+          ES_ENDPOINT: !GetAtt OpensearchDomain.DomainEndpoint
+          REGION: !Ref 'AWS::Region'
+          ACCOUNT_ID: !Ref 'AWS::AccountId'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 1e5478c7-e74c-4288-965d-9533817d6f09
+  WAFv2Modification:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Description: WAF Dashboard - detects new WebACL and rules for WAFv2.
+      EventPattern:
+        source:
+          - aws.wafv2
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - wafv2.amazonaws.com
+          eventName:
+            - CreateWebACL
+            - CreateRule
+      Name: WAFv2Modification
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt KibanaUpdate.Arn
+          Id: '1'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 5f938cd9-015d-4a45-adbf-6d79d1d2cc2b
+  WAFGlobalModification:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Description: WAF Dashboard - detects new WebACL and rules for WAF Global.
+      EventPattern:
+        source:
+          - aws.waf
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - waf.amazonaws.com
+          eventName:
+            - CreateWebACL
+            - CreateRule
+      Name: WAFGlobalModification
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt KibanaUpdate.Arn
+          Id: '1'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 6d383def-d8f6-41e5-b7e7-07a543637cc3
+  WAFRegionalModification:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Description: WAF Dashboard - detects new WebACL and rules for WAF Regional.
+      EventPattern:
+        source:
+          - aws.waf-regional
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - waf-regional.amazonaws.com
+          eventName:
+            - CreateWebACL
+            - CreateRule
+      Name: WAFRegionalModification
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt KibanaUpdate.Arn
+          Id: '1'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 4b02bfcd-3945-4c31-aac9-93f91a85367d
+  KibanaUpdateWAFGlobalPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref KibanaUpdate
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WAFGlobalModification.Arn
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 739a3890-cf37-40c3-b114-19342f900952
+  KibanaUpdateWAFv2Permission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref KibanaUpdate
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WAFv2Modification.Arn
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: a021e7ca-c90d-4cfe-82ab-d0da147103cb
+  KibanaUpdateWAFRegionalPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref KibanaUpdate
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WAFRegionalModification.Arn
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: f4606193-3b26-44dc-9184-89710a7e6379
+Outputs:
+  DashboardLinkOutput:
+    Description: Link to WAF Dashboard
+    Value: !Join 
+      - ''
+      - - 'https://'
+        - !GetAtt OpensearchDomain.DomainEndpoint
+        - /_plugin/kibana/
+Metadata:
+  'AWS::CloudFormation::Designer':
+    cb49de65-8b46-49fe-b633-b9ea5e9b8a95:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 90
+      z: 1
+      embeds: []
+    e7738556-0548-4145-bad5-ee02e9d5642c:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 90
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - cb49de65-8b46-49fe-b633-b9ea5e9b8a95
+    bd86a38e-5126-4c87-a1ca-164226abf19d:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 210
+      z: 1
+      embeds: []
+    8db201ea-ceef-47a4-8696-6f5c19fb6101:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 210
+      z: 1
+      embeds: []
+    bce5a84e-9b0e-4a02-b177-49afec844fd2:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 90
+      z: 1
+      embeds: []
+    bd917a13-280d-4a17-a9f4-af5e88be706c:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 210
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 8db201ea-ceef-47a4-8696-6f5c19fb6101
+    8fe815ea-ddcb-41fc-b4c5-721225e03ee1:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 330
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - bce5a84e-9b0e-4a02-b177-49afec844fd2
+    51f0b6cb-b56e-4d67-afd8-0238399599e3:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 330
+      z: 1
+      embeds: []
+    f6b01f9e-6233-4052-8e23-32da779fd3a9:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 330
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 51f0b6cb-b56e-4d67-afd8-0238399599e3
+    26f81a50-62cf-4dcf-b883-134a85a8fb88:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 90
+      z: 1
+      embeds: []
+    d14adc08-86bb-46ad-a3eb-af4c9a6fa51b:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 210
+      z: 1
+      embeds: []
+    afc63dab-90de-43d6-9c52-829a0e7f312a:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 330
+      z: 1
+      embeds: []
+    1e5478c7-e74c-4288-965d-9533817d6f09:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 450
+      z: 1
+      embeds: []
+    4b02bfcd-3945-4c31-aac9-93f91a85367d:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 450
+      z: 1
+      embeds: []
+    f4606193-3b26-44dc-9184-89710a7e6379:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 450
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 1e5478c7-e74c-4288-965d-9533817d6f09
+    6d383def-d8f6-41e5-b7e7-07a543637cc3:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 450
+      z: 1
+      embeds: []
+    739a3890-cf37-40c3-b114-19342f900952:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 540
+        'y': 90
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 1e5478c7-e74c-4288-965d-9533817d6f09
+    5f938cd9-015d-4a45-adbf-6d79d1d2cc2b:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 540
+        'y': 210
+      z: 1
+      embeds: []
+    a021e7ca-c90d-4cfe-82ab-d0da147103cb:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 540
+        'y': 330
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 1e5478c7-e74c-4288-965d-9533817d6f09
+    364aa33e-97f8-46f8-92dc-f6751ecee76c:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 540
+        'y': 450
+      z: 1
+      embeds: []
+      dependson:
+        - 71faf532-95f2-4adf-8ef2-dbaad1719c50
+    6b409a73-30a1-47ef-ae0a-9952750de495:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 570
+      z: 1
+      embeds: []
+    649d599b-7152-4e50-9395-deecbec8f80e:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 570
+      z: 1
+      embeds: []
+    a140e4da-53b5-48d1-abaa-19abb5fa4d01:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 570
+      z: 1
+      embeds: []
+    5b8e2a5d-009d-45a8-8e80-0b6ff0b07ff8:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 570
+      z: 1
+      embeds: []
+    b8d6fd85-0b4d-4215-b363-f2b1c8f6b1bd:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 540
+        'y': 570
+      z: 1
+      embeds: []
+    76b56272-b6be-4749-81e2-b36c969d2065:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 660
+        'y': 90
+      z: 1
+      embeds: []
+      dependson:
+        - afc63dab-90de-43d6-9c52-829a0e7f312a
+    aa3d0f64-4227-4c23-8350-07f507369206:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 660
+        'y': 210
+      z: 1
+      embeds: []
+      dependson:
+        - 76b56272-b6be-4749-81e2-b36c969d2065
+    0b46eab3-417d-435d-b8ae-1eec593e95ff:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 660
+        'y': 330
+      z: 1
+      embeds: []
+      dependson:
+        - 76b56272-b6be-4749-81e2-b36c969d2065
+    71faf532-95f2-4adf-8ef2-dbaad1719c50:
+      size:
+        width: 90
+        height: 80
+      position:
+        x: 730
+        'y': 430
+      z: 0
+      embeds: []
+    9f1263b0-de61-4e67-a410-ae7981770b23:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 865.6961642649579
+        'y': 510.4600691846726
+      z: 0
+      dependson:
+        - 71faf532-95f2-4adf-8ef2-dbaad1719c50
+    2a171caf-06e4-49b4-a6f0-f77d9d0c269e:
+      source:
+        id: 9f1263b0-de61-4e67-a410-ae7981770b23
+      target:
+        id: 71faf532-95f2-4adf-8ef2-dbaad1719c50
+      z: 2
